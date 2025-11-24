@@ -1,0 +1,6 @@
+# Simple placeholder Dockerfile for Next.js app
+FROM node:20-alpine AS base
+WORKDIR /app
+
+# In a real project you'd install dependencies and build here.
+# This file is intentionally minimal as a template.
