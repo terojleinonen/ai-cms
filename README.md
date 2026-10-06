@@ -1,6 +1,6 @@
 # AI CMS
 
-[![CI](https://github.com/terojleinonen/cms-template-repo/actions/workflows/ci.yml/badge.svg)](https://github.com/terojleinonen/cms-template-repo/actions/workflows/ci.yml)
+[![CI](https://github.com/terojleinonen/ai-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/terojleinonen/ai-cms/actions/workflows/ci.yml)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
 ![Next.js 15](https://img.shields.io/badge/Next.js-15-000?logo=nextdotjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
