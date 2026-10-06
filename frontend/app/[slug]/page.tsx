@@ -15,6 +15,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+// AI drafts usually open with their own "# Title" line; drop it when it repeats the page heading.
+function withoutDuplicateTitle(body: string, title: string): string {
+  const match = body.match(/^\s*#\s+(.+?)\s*\n/);
+  return match && match[1].trim().toLowerCase() === title.trim().toLowerCase()
+    ? body.slice(match[0].length)
+    : body;
+}
+
 export default async function ContentPage({ params }: Props) {
   const item = await getPublished((await params).slug);
   if (!item) notFound();
@@ -26,7 +34,7 @@ export default async function ContentPage({ params }: Props) {
         {item.publishedAt && new Date(item.publishedAt).toLocaleDateString("en")}
         {item.tags.map((t) => <span key={t} className="tag">{t}</span>)}
       </div>
-      <Markdown>{item.body}</Markdown>
+      <Markdown>{withoutDuplicateTitle(item.body, item.title)}</Markdown>
     </article>
   );
 }
