@@ -63,6 +63,9 @@ API_BASE_URL=http://localhost:5000 ADMIN_API_KEY=dev-admin-key ADMIN_PASSWORD=ch
 ```bash
 cd backend && dotnet test          # 23 unit + integration tests
 cd frontend && npm run typecheck && npm run build
+
+# end-to-end smoke test against a running stack (what CI runs after `docker compose up`)
+ADMIN_PASSWORD=<your password> scripts/smoke-test.sh
 ```
 
 ## Configuration
@@ -93,7 +96,7 @@ Errors use RFC 7807 problem details (`400` validation, `401`, `404`, `409` dupli
 - **Schema management:** the schema is created with `EnsureCreated` on startup. Before evolving the schema in production, switch to EF Core migrations.
 - **Single shared admin identity:** one API key and one password, with no per-user accounts or roles. Swap in ASP.NET Identity or an OIDC provider for multi-user use.
 - **Rate limiting is in-process** and per client IP; behind a proxy, configure forwarded headers or use a distributed limiter.
-- **PostgreSQL and the Docker images** are configured but are not exercised by the automated tests (those run on SQLite).
+- **Unit/integration tests run on SQLite;** PostgreSQL and the containers are covered by the CI compose smoke test (`scripts/smoke-test.sh`).
 - Media uploads, content versioning and AI image generation are not implemented.
 
 ## License

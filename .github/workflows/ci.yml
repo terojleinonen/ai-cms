@@ -28,10 +28,23 @@ jobs:
       - run: npm run build
         env: { ADMIN_PASSWORD: ci, ADMIN_API_KEY: ci }
 
-  docker:
+  compose-smoke:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
+    timeout-minutes: 15
+    env:
+      POSTGRES_PASSWORD: ci-postgres-pw
+      ADMIN_API_KEY: ci-admin-api-key
+      ADMIN_PASSWORD: ci-admin-password
     steps:
       - uses: actions/checkout@v4
-      - run: docker build ./backend
-      - run: docker build ./frontend
+      - name: Start the stack
+        run: docker compose up --build --detach
+      - name: Smoke test
+        run: scripts/smoke-test.sh
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes
