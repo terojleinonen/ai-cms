@@ -20,7 +20,7 @@ h1 { margin: .5rem 0 1rem; } h2 { margin: .25rem 0 .5rem; }
 .card h2 a, .card a h2 { color: var(--text); } .card p { margin: .25rem 0 .5rem; }
 .meta { color: var(--muted); font-size: .85rem; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .tag { background: var(--border); border-radius: 999px; padding: 0 .6rem; font-size: .75rem; }
-.prose { max-width: 70ch; } .prose img { max-width: 100%; } .prose pre { overflow: auto; background: var(--panel); padding: 1rem; border-radius: 8px; }
+.prose { max-width: 70ch; } .prose blockquote { margin: 1rem 0; padding: .1rem 1rem; border-left: 3px solid var(--accent); color: var(--muted); } .prose img { max-width: 100%; } .prose pre { overflow: auto; background: var(--panel); padding: 1rem; border-radius: 8px; }
 .input { width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: .55rem .7rem; font: inherit; }
 .input:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 textarea.body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; }
