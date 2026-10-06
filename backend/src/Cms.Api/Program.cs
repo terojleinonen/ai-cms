@@ -1,24 +1,79 @@
-using Cms.Ai.Services;
-using Cms.Application.Interfaces;
-using Cms.Domain.Entities;
+using System.Threading.RateLimiting;
+using Cms.Ai;
+using Cms.Api.Endpoints;
+using Cms.Api.Security;
+using Cms.Application.Common;
+using Cms.Infrastructure;
 using Cms.Infrastructure.Persistence;
-using Cms.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// DbContext (in-memory by default for template)
-builder.Services.AddDbContext<CmsDbContext>(options =>
-    options.UseInMemoryDatabase("cms-template"));
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAi(builder.Configuration);
 
-// Services
-builder.Services.AddScoped<IContentService, ContentService>();
-builder.Services.AddSingleton<IAiTextService, DummyAiTextService>();
+builder.Services.Configure<ApiKeyOptions>(builder.Configuration.GetSection(ApiKeyOptions.Section));
+builder.Services.AddSingleton<ApiKeyFilter>();
 
+builder.Services.AddProblemDetails();
+builder.Services.AddHealthChecks().AddDbContextCheck<CmsDbContext>("database");
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
+var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+{
+    if (origins.Length > 0) p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
+}));
+
+// AI calls cost money: cap them per client.
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddPolicy(AiEndpoints.RateLimitPolicy, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+});
+
 var app = builder.Build();
+
+// Schema is created on first start; see README for the migrations note.
+using (var scope = app.Services.CreateScope())
+{
+    scope.ServiceProvider.GetRequiredService<CmsDbContext>().Database.EnsureCreated();
+}
+
+app.UseExceptionHandler(errorApp => errorApp.Run(async ctx =>
+{
+    var ex = ctx.Features.Get<IExceptionHandlerFeature>()?.Error;
+    var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Cms.Api");
+
+    (int status, string title, IDictionary<string, string[]>? errors) = ex switch
+    {
+        ValidationFailedException v => (StatusCodes.Status400BadRequest, "Validation failed", v.Errors),
+        NotFoundException n => (StatusCodes.Status404NotFound, n.Message, null),
+        ConflictException c => (StatusCodes.Status409Conflict, c.Message, null),
+        AiProviderException a => (StatusCodes.Status502BadGateway, a.Message, null),
+        BadHttpRequestException => (StatusCodes.Status400BadRequest, "Malformed request.", null),
+        _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", null)
+    };
+    if (status >= 500 && status != StatusCodes.Status502BadGateway) logger.LogError(ex, "Unhandled exception");
+
+    ctx.Response.StatusCode = status;
+    ctx.Response.ContentType = "application/problem+json";
+    await Results.Json(errors is null
+            ? new ProblemDetails { Status = status, Title = title }
+            : new ValidationProblemDetails(errors) { Status = status, Title = title },
+        contentType: "application/problem+json").ExecuteAsync(ctx);
+}));
+
+app.UseCors();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -26,48 +81,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.MapGet("/", () => Results.Ok(new { status = "ok", message = "CMS API template running" }));
-
-// Content endpoints (very basic)
-app.MapGet("/api/content", async (IContentService contentService, CancellationToken ct) =>
-{
-    var items = await contentService.GetAllAsync(ct);
-    return Results.Ok(items);
-});
-
-app.MapGet("/api/content/{id:guid}", async (Guid id, IContentService contentService, CancellationToken ct) =>
-{
-    var item = await contentService.GetByIdAsync(id, ct);
-    return item is null ? Results.NotFound() : Results.Ok(item);
-});
-
-app.MapPost("/api/content", async (ContentItem item, IContentService contentService, CancellationToken ct) =>
-{
-    var created = await contentService.CreateAsync(item, ct);
-    return Results.Created($"/api/content/{created.Id}", created);
-});
-
-// AI endpoints (dummy)
-app.MapPost("/api/ai/generate-text", async (IAiTextService ai, AiGenerateRequest req, CancellationToken ct) =>
-{
-    var result = await ai.GenerateAsync(req.Prompt, ct);
-    return Results.Ok(new { text = result });
-});
-
-app.MapPost("/api/ai/rewrite", async (IAiTextService ai, AiRewriteRequest req, CancellationToken ct) =>
-{
-    var result = await ai.RewriteAsync(req.Text, req.Instruction, ct);
-    return Results.Ok(new { text = result });
-});
-
-app.MapPost("/api/ai/summarize", async (IAiTextService ai, AiSummarizeRequest req, CancellationToken ct) =>
-{
-    var result = await ai.SummarizeAsync(req.Text, ct);
-    return Results.Ok(new { text = result });
-});
+app.MapHealthChecks("/health");
+app.MapGet("/", () => Results.Ok(new { name = "AI CMS API", docs = "/swagger" }));
+app.MapContentEndpoints();
+app.MapAiEndpoints();
 
 app.Run();
 
-public record AiGenerateRequest(string Prompt);
-public record AiRewriteRequest(string Text, string Instruction);
-public record AiSummarizeRequest(string Text);
+public partial class Program;
