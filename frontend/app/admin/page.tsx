@@ -1,76 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-type ContentItem = {
-  id: string;
-  slug: string;
-  createdAt: string;
-  updatedAt: string;
-  isDraft: boolean;
-};
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { api } from "@/lib/client-api";
+import type { ContentListItem } from "@/lib/types";
 
 export default function AdminDashboard() {
-  const [items, setItems] = useState<ContentItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<ContentListItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch("http://localhost:5000/api/content");
-        if (!res.ok) throw new Error("Failed to fetch content");
-        const data = await res.json();
-        setItems(data);
-      } catch (err: any) {
-        setError(err.message ?? "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const load = useCallback(async (term: string) => {
+    setLoading(true);
+    try {
+      setItems((await api.list(term)).items);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    const t = setTimeout(() => load(search), 250);
+    return () => clearTimeout(t);
+  }, [search, load]);
+
   return (
-    <main style={{ padding: "2rem" }}>
-      <h1>Admin Dashboard</h1>
-      <p>This page lists content items from the C# API.</p>
-
-      {loading && <p>Loading…</p>}
-      {error && <p style={{ color: "tomato" }}>Error: {error}</p>}
-
-      {!loading && !error && (
-        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #4b5563" }}>ID</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #4b5563" }}>Slug</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #4b5563" }}>Created</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #4b5563" }}>Updated</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #4b5563" }}>Draft</th>
+    <main>
+      <div className="row between">
+        <h1>Content</h1>
+        <Link className="btn primary" href="/admin/new">New content</Link>
+      </div>
+      <input
+        className="input"
+        placeholder="Search by title or slug…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        aria-label="Search content"
+      />
+      {error && <p className="error">{error}</p>}
+      {loading && <p className="muted">Loading…</p>}
+      {!loading && !error && items.length === 0 && <p className="muted">No content found.</p>}
+      <table className="table">
+        <thead>
+          <tr><th>Title</th><th>Type</th><th>Status</th><th>Updated</th></tr>
+        </thead>
+        <tbody>
+          {items.map((i) => (
+            <tr key={i.id}>
+              <td><Link href={`/admin/${i.id}`}>{i.title}</Link><div className="muted small">/{i.slug}</div></td>
+              <td>{i.kind}</td>
+              <td><span className={`badge ${i.status.toLowerCase()}`}>{i.status}</span></td>
+              <td>{new Date(i.updatedAt).toLocaleString("en")}</td>
             </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td style={{ padding: "0.25rem 0.5rem" }}>{item.id}</td>
-                <td style={{ padding: "0.25rem 0.5rem" }}>{item.slug}</td>
-                <td style={{ padding: "0.25rem 0.5rem" }}>{new Date(item.createdAt).toLocaleString()}</td>
-                <td style={{ padding: "0.25rem 0.5rem" }}>{new Date(item.updatedAt).toLocaleString()}</td>
-                <td style={{ padding: "0.25rem 0.5rem" }}>{item.isDraft ? "Yes" : "No"}</td>
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: "0.5rem" }}>
-                  No content yet. POST to /api/content to create some items.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
+          ))}
+        </tbody>
+      </table>
     </main>
   );
 }

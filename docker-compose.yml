@@ -1,0 +1,44 @@
+# Full stack: PostgreSQL + .NET API + Next.js frontend.
+#   cp .env.example .env   # then edit secrets
+#   docker compose up --build
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: cms
+      POSTGRES_USER: cms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cms -d cms"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__Provider: Postgres
+      ConnectionStrings__Cms: Host=db;Database=cms;Username=cms;Password=${POSTGRES_PASSWORD}
+      Auth__AdminApiKey: ${ADMIN_API_KEY:?set ADMIN_API_KEY in .env}
+      Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      Anthropic__Model: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+    ports:
+      - "5000:8080"
+
+  web:
+    build: ./frontend
+    depends_on: [api]
+    environment:
+      API_BASE_URL: http://api:8080
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

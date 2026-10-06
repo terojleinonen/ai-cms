@@ -1,6 +1,0 @@
-# Simple placeholder Dockerfile for ASP.NET Core API
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-WORKDIR /app
-
-# In a real project you'd copy published output here.
-# This file is intentionally minimal as a template.
